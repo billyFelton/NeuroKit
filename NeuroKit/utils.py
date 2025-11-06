@@ -1,14 +1,27 @@
 """
 Helpers: Vault logging, node config fetch.
+Optional Postgres: Mocks for non-Vault (e.g., Conductor/Cadre).
 """
 
 import os
-import psycopg2
+import psutil
 from typing import Any, Dict
+
+# Optional Postgres: Only import if env set (Vault-only dep)
+try:
+    if os.getenv('VAULT_DB_URL'):
+        import psycopg2
+        _DB_AVAILABLE = True
+    else:
+        _DB_AVAILABLE = False
+except ImportError:
+    _DB_AVAILABLE = False
+
+_log_store = []  # In-memory fallback for non-DB (stateless, per-process)
 
 def log_to_vault(table: str, data: Dict[str, Any]) -> bool:
     """
-    Logs dict to Vault Postgres (e.g., feats/history).
+    Logs dict to Vault Postgres if available, else mocks (stdout/file).
 
     Args:
         table (str): e.g., 'features' or 'convo_history'.
@@ -22,31 +35,42 @@ def log_to_vault(table: str, data: Dict[str, Any]) -> bool:
         >>> log_to_vault('signals', {'alpha': 0.5})
 
     Raises:
-        ConnectionError: DB fail.
+        ConnectionError: DB configured but fails.
 
     Notes:
-        - VAULT_DB_URL required.
-        - Fullness check: Auto-alert if >80% via psutil.disk.
+        - VAULT_DB_URL triggers Postgres (Vault node only).
+        - Fullness check: Auto-alert if >80% of 64GB via psutil.disk.
+        - Mock: Stdout in Conductor; ties to health_report for Cadre feats.
     """
-    db_url = os.getenv('VAULT_DB_URL')
-    if not db_url:
-        raise ValueError("VAULT_DB_URL unset.")
-    try:
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-        columns = ', '.join(data.keys())
-        placeholders = ', '.join(['%s'] * len(data))
-        cur.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", list(data.values()))
-        conn.commit()
-        cur.close()
-        conn.close()
-        # Fullness alert
+    if _DB_AVAILABLE:
+        db_url = os.getenv('VAULT_DB_URL')
+        if not db_url:
+            raise ValueError("VAULT_DB_URL unset for DB mode.")
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            cur.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", list(data.values()))
+            conn.commit()
+            cur.close()
+            conn.close()
+            # Fullness alert
+            free_gb = psutil.disk_usage('/').free / (1024**3)
+            if free_gb < 10:  # 64GB threshold
+                print("ALERT: Vault storage low!")
+            return True
+        except psycopg2.Error as e:
+            raise ConnectionError(f"Log fail: {e}")
+    else:
+        # Mock: Stdout + in-memory for non-Vault (lightweight)
+        log_entry = {'table': table, 'data': data, 'timestamp': 'mock_now'}
+        _log_store.append(log_entry)
+        print(f"Mock Log to {table}: {data}")  # Or write to /tmp/neurokit.log
         free_gb = psutil.disk_usage('/').free / (1024**3)
-        if free_gb < 10:  # 64GB threshold
-            print("ALERT: Vault storage low!")
+        if free_gb < 10:
+            print("ALERT: Local storage low!")
         return True
-    except psycopg2.Error as e:
-        raise ConnectionError(f"Log fail: {e}")
 
 def get_node_config(node_id: str) -> Dict[str, str]:
     """
