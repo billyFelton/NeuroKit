@@ -3,10 +3,10 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "NeuroKit"
+name = "neurokit"
 version = "0.1.0"
 description = "NeuroNetwork component API"
-authors = [{name = "Billy Felton", email = "billy@example.com"}]
+authors = [{name = "Billy Felton", email = "billy@halo.inc"}]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
