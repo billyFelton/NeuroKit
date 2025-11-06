@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "NeuroKit"
 version = "0.1.0"
-description = "NeuroNetwork component API – registration, health, state"
+description = "NeuroNetwork component API"
 authors = [{name = "Billy Felton", email = "billy@example.com"}]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,6 +18,3 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "black"]
-
-[project.urls]
-Homepage = "https://github.com/billyFelton/NeuroKit"
