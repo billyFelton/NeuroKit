@@ -2,6 +2,7 @@ import psutil
 import json
 import pika
 import logging
+import time  # For retry sleeps
 from threading import Thread
 from typing import Optional, Callable, Dict
 from fastapi import FastAPI
@@ -11,7 +12,7 @@ from .utils import validate_neuro_env
 def get_system_load() -> int:
     cpu = psutil.cpu_percent(interval=1)
     mem = psutil.virtual_memory().percent
-    return min(100, int((cpu + mem) / 2))  # Weighted average
+    return min(100, int((cpu + mem) / 2))
 
 class HealthEndpoint:
     def __init__(self, uid: str, custom_check: Callable[[], Dict] = lambda: {}):
@@ -31,6 +32,13 @@ class HealthEndpoint:
         async def health():
             return self.payload()
 
+# Optional: Convenience function if you had create_health_app
+def create_health_app(uid: str, custom_check: Callable[[], Dict] = lambda: {}):
+    app = FastAPI()
+    health = HealthEndpoint(uid=uid, custom_check=custom_check)
+    health.add_to_app(app)
+    return app
+
 class HealthMonitor(Thread):
     def __init__(self, callback: Optional[Callable[[Dict], None]] = None):
         super().__init__(daemon=True)
@@ -42,6 +50,7 @@ class HealthMonitor(Thread):
         config = validate_neuro_env()
         params = pika.ConnectionParameters(
             host=config["CONDUCTOR_HOST"],
+            port=5672,
             credentials=pika.PlainCredentials(
                 os.getenv("RABBITMQ_USER"), os.getenv("RABBITMQ_PASS")
             )
@@ -63,7 +72,7 @@ class HealthMonitor(Thread):
                 channel.start_consuming()
             except Exception as e:
                 logging.error(f"Health monitor error: {e}")
-                time.sleep(5)  # Retry
+                time.sleep(5)
 
     def stop(self):
         self.running = False
