@@ -1,20 +1,24 @@
-import psutil
 import json
-import pika
 import logging
-import time  # For retry sleeps
+import time
+import pika
 from threading import Thread
 from typing import Optional, Callable, Dict
 from fastapi import FastAPI
+import psutil
 from .models import HealthPayload, HealthStatus, NetworkHealth
 from .utils import validate_neuro_env
 
+logging.basicConfig(level=logging.INFO)
+
 def get_system_load() -> int:
+    """Compute weighted CPU/mem load for health reporting."""
     cpu = psutil.cpu_percent(interval=1)
     mem = psutil.virtual_memory().percent
     return min(100, int((cpu + mem) / 2))
 
 class HealthEndpoint:
+    """Manages /health endpoint payload for Consul polling."""
     def __init__(self, uid: str, custom_check: Callable[[], Dict] = lambda: {}):
         self.uid = uid
         self.custom_check = custom_check
@@ -28,18 +32,22 @@ class HealthEndpoint:
         ).model_dump()
 
     def add_to_app(self, app: FastAPI, prefix: str = "/health"):
-        @app.get(f"{prefix}")
+        """Mount /health to a FastAPI app."""
+        @app.get(prefix)
         async def health():
-            return self.payload()
+            payload = self.payload()
+            logging.info(f"/health polled: {payload}")
+            return payload
 
-# Optional: Convenience function if you had create_health_app
+# Convenience for quick app creation (if needed in components)
 def create_health_app(uid: str, custom_check: Callable[[], Dict] = lambda: {}):
-    app = FastAPI()
+    app = FastAPI(title="NeuroKit Health")
     health = HealthEndpoint(uid=uid, custom_check=custom_check)
     health.add_to_app(app)
     return app
 
 class HealthMonitor(Thread):
+    """Subscribes to health_check_queue for neuro-network broadcasts."""
     def __init__(self, callback: Optional[Callable[[Dict], None]] = None):
         super().__init__(daemon=True)
         self.state: Dict = {"neuro_network_status": "initializing"}
@@ -63,16 +71,20 @@ class HealthMonitor(Thread):
                 channel.basic_qos(prefetch_count=1)
 
                 def on_message(ch, method, properties, body):
-                    self.state = json.loads(body)
-                    if self.callback:
-                        self.callback(self.state)
-                    ch.basic_ack(delivery_tag=method.delivery_tag)
+                    try:
+                        self.state = json.loads(body)
+                        if self.callback:
+                            self.callback(self.state)
+                        ch.basic_ack(delivery_tag=method.delivery_tag)
+                    except json.JSONDecodeError as e:
+                        logging.error(f"Invalid health broadcast JSON: {e}")
+                        ch.basic_nack(delivery_tag=method.delivery_tag)
 
                 channel.basic_consume(queue="health_check_queue", on_message_callback=on_message)
                 channel.start_consuming()
             except Exception as e:
-                logging.error(f"Health monitor error: {e}")
-                time.sleep(5)
+                logging.error(f"Health monitor connection error: {e}")
+                time.sleep(5)  # Retry backoff
 
     def stop(self):
         self.running = False
