@@ -39,8 +39,8 @@ class HealthEndpoint:
             logging.info(f"/health polled: {payload}")
             return payload
 
-# Convenience for quick app creation (if needed in components)
 def create_health_app(uid: str, custom_check: Callable[[], Dict] = lambda: {}):
+    """Convenience: Create a standalone FastAPI app with /health mounted."""
     app = FastAPI(title="NeuroKit Health")
     health = HealthEndpoint(uid=uid, custom_check=custom_check)
     health.add_to_app(app)
@@ -84,7 +84,7 @@ class HealthMonitor(Thread):
                 channel.start_consuming()
             except Exception as e:
                 logging.error(f"Health monitor connection error: {e}")
-                time.sleep(5)  # Retry backoff
+                time.sleep(5)
 
     def stop(self):
         self.running = False
