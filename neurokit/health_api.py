@@ -1,27 +1,69 @@
-from flask import Flask, jsonify
-import consul
 import psutil
-import os
+import json
+import pika
+import logging
+from threading import Thread
+from typing import Optional, Callable, Dict
+from fastapi import FastAPI
+from .models import HealthPayload, HealthStatus, NetworkHealth
+from .utils import validate_neuro_env
 
-def create_health_app(service_name):
-    app = Flask(__name__)
-    c = consul.Consul(host='conductor', port=8500)
+def get_system_load() -> int:
+    cpu = psutil.cpu_percent(interval=1)
+    mem = psutil.virtual_memory().percent
+    return min(100, int((cpu + mem) / 2))  # Weighted average
 
-    @app.route('/health')
-    def health():
-        metrics = {
-            'status': 'healthy',
-            'cpu': psutil.cpu_percent(),
-            'ram_gb': psutil.virtual_memory().available / (1024**3),
-            'service': service_name
-        }
-        c.agent.service.register(
-            name=service_name,
-            service_id=f"{service_name}-{os.getenv('NODE_IP', 'local')}",
-            address=os.getenv('NODE_IP', '10.1.1.20'),
-            port=9090,
-            check=consul.Check.http(f"http://{os.getenv('NODE_IP', '10.1.1.20')}:9090/health", interval="10s")
+class HealthEndpoint:
+    def __init__(self, uid: str, custom_check: Callable[[], Dict] = lambda: {}):
+        self.uid = uid
+        self.custom_check = custom_check
+
+    def payload(self, status: HealthStatus = HealthStatus.PASSING) -> Dict:
+        return HealthPayload(
+            uid=self.uid,
+            load=get_system_load(),
+            status=status,
+            custom=self.custom_check()
+        ).model_dump()
+
+    def add_to_app(self, app: FastAPI, prefix: str = "/health"):
+        @app.get(f"{prefix}")
+        async def health():
+            return self.payload()
+
+class HealthMonitor(Thread):
+    def __init__(self, callback: Optional[Callable[[Dict], None]] = None):
+        super().__init__(daemon=True)
+        self.state: Dict = {"neuro_network_status": "initializing"}
+        self.callback = callback
+        self.running = True
+
+    def run(self):
+        config = validate_neuro_env()
+        params = pika.ConnectionParameters(
+            host=config["CONDUCTOR_HOST"],
+            credentials=pika.PlainCredentials(
+                os.getenv("RABBITMQ_USER"), os.getenv("RABBITMQ_PASS")
+            )
         )
-        return jsonify(metrics)
+        while self.running:
+            try:
+                connection = pika.BlockingConnection(params)
+                channel = connection.channel()
+                channel.queue_declare("health_check_queue", durable=True)
+                channel.basic_qos(prefetch_count=1)
 
-    return app
+                def on_message(ch, method, properties, body):
+                    self.state = json.loads(body)
+                    if self.callback:
+                        self.callback(self.state)
+                    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+                channel.basic_consume(queue="health_check_queue", on_message_callback=on_message)
+                channel.start_consuming()
+            except Exception as e:
+                logging.error(f"Health monitor error: {e}")
+                time.sleep(5)  # Retry
+
+    def stop(self):
+        self.running = False

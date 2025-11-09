@@ -1,0 +1,36 @@
+version: '3.8'
+services:
+
+  test-vox:
+    image: neurokit-test
+    environment:
+      - NEURO_ROLE=vox
+      - CONDUCTOR_HOST=192.168.1.174
+      - RABBITMQ_USER=conductor_user
+      - RABBITMQ_PASS=conductor_pass
+      - HOST_IP=191.168.1.174
+      - API_PORT=8001
+
+#  test-vault:
+#    image: neurokit-test
+#    environment:
+#      - NEURO_ROLE=vault
+#      - HOST_IP=10.1.1.30
+#
+#  test-cadre:
+#    image: neurokit-test
+#    environment:
+#      - NEURO_ROLE=cadre
+#      - HOST_IP=10.1.1.40
+#
+#  test-cadre-light:
+#    image: neurokit-test
+#    environment:
+#      - NEURO_ROLE=cadre_light
+#      - HOST_IP=10.1.1.41
+
+#networks:
+#  default:
+#    ipam:
+#      config:
+#        - subnet: 10.1.1.0/24

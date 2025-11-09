@@ -21,9 +21,10 @@ RUN git clone --depth 1 --branch ${GIT_BRANCH} ${GIT_REPO} /app && \
 
 # Workdir: Repo root for editable install
 WORKDIR /app
+COPY entrypoint.py /app/entrypoint.py
 
 # Entrypoint: From repo (pulled with clone)
-ENTRYPOINT ["python", "/app/test/entrypoint.py"]
+ENTRYPOINT ["python", "entrypoint.py"]
 
 # Default cmd: Allow overrides if needed
 CMD []

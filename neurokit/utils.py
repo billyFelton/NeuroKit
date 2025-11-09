@@ -9,8 +9,8 @@ class NeuroKitEnvError(EnvironmentError):
 
 def validate_neuro_env() -> Dict[str, str]:
     """
-    Validate and return required/shared env vars for neuro-network integration.
-    Raise NeuroKitEnvError on issues. Call early in entrypoints.
+    Validate required env vars for neuro-network integration.
+    Raise NeuroKitEnvError on issues.
     """
     required = {
         "CONDUCTOR_HOST": {
@@ -43,10 +43,10 @@ def validate_neuro_env() -> Dict[str, str]:
     if missing_or_invalid:
         raise NeuroKitEnvError(
             "Neuro-network integration failed: " + "; ".join(missing_or_invalid) +
-            ". Set in container env (docker-compose.yml or .env). Example: CONDUCTOR_HOST=10.1.1.20"
+            ". Set in container env (docker-compose.yml or .env)."
         )
 
-    # Optionals with defaults
+    # Optionals
     config["HEALTH_PORT"] = int(os.getenv("HEALTH_PORT", "8081"))
     if not (1024 <= config["HEALTH_PORT"] <= 65535):
         raise NeuroKitEnvError(f"HEALTH_PORT {config['HEALTH_PORT']} out of range")
@@ -55,7 +55,7 @@ def validate_neuro_env() -> Dict[str, str]:
     os.makedirs(config["NEUROKIT_DATA_DIR"], exist_ok=True)
 
     config["HOST_IP"] = os.getenv("HOST_IP") or _auto_detect_ip()
-    _validate_subnet(config["HOST_IP"])  # Reuse for self
+    _validate_subnet(config["HOST_IP"])
 
     return config
 
@@ -83,9 +83,10 @@ def _validate_subnet(val: str):
 
 def _auto_detect_ip() -> str:
     try:
-        # Connect to Conductor (if reachable) for local IP; fallback to hostname
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect((os.getenv("CONDUCTOR_HOST", "10.1.1.20"), 5672))
-        return s.getsockname()[0]
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
     except Exception:
         return socket.gethostbyname(socket.gethostname())

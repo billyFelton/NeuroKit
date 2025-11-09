@@ -1,20 +1,17 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "neurokit"
-version = "0.1.0"
-description = "NeuroNetwork component API"
-authors = [{name = "Billy Felton", email = "billy@halo.inc"}]
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "pika",
-    "flask",
-    "python-consul",
-    "psutil",
-]
+version = "0.3.0"
+description = "NeuroKit library for neuro-network integration"
+authors = ["Billy Felton <billy@felton.com>"]
 
-[project.optional-dependencies]
-dev = ["pytest", "black"]
+[tool.poetry.dependencies]
+python = "^3.10"
+pydantic = "^2.5.0"
+pika = "^1.3.2"
+psutil = "^6.0.0"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
