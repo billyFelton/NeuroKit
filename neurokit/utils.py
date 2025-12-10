@@ -1,11 +1,14 @@
+# neurokit/utils.py
 import os
 import socket
 import ipaddress
 from typing import Dict
 
+
 class NeuroKitEnvError(EnvironmentError):
     """Custom exception for neuro-network env issues."""
     pass
+
 
 def validate_neuro_env() -> Dict[str, str]:
     """
@@ -46,7 +49,7 @@ def validate_neuro_env() -> Dict[str, str]:
             ". Set in container env (docker-compose.yml or .env)."
         )
 
-    # Optionals
+    # Optional settings with safe defaults
     config["HEALTH_PORT"] = int(os.getenv("HEALTH_PORT", "8081"))
     if not (1024 <= config["HEALTH_PORT"] <= 65535):
         raise NeuroKitEnvError(f"HEALTH_PORT {config['HEALTH_PORT']} out of range")
@@ -54,39 +57,42 @@ def validate_neuro_env() -> Dict[str, str]:
     config["NEUROKIT_DATA_DIR"] = os.getenv("NEUROKIT_DATA_DIR", "/data/neurokit")
     os.makedirs(config["NEUROKIT_DATA_DIR"], exist_ok=True)
 
-    config["HOST_IP"] = os.getenv("HOST_IP") or _auto_detect_ip()
-    _validate_subnet(config["HOST_IP"])
+    # HOST_IP: prefer explicit env var, otherwise auto-detect (perfect in network_mode: host)
+    host_ip = os.getenv("HOST_IP")
+    if host_ip:
+        config["HOST_IP"] = host_ip
+        logging.info(f"Using explicit HOST_IP from environment: {host_ip}")
+    else:
+        config["HOST_IP"] = _auto_detect_ip()
+        logging.info(f"Auto-detected HOST_IP: {config['HOST_IP']} (host network mode)")
 
     return config
+
 
 def _validate_non_empty(val: str) -> str:
     if not val.strip():
         raise ValueError("empty or whitespace")
     return val.strip()
 
+
 def _validate_conductor_host(val: str) -> str:
     val = _validate_non_empty(val)
-    _validate_ipv4(val)
-    _validate_subnet(val)
-    return val
-
-def _validate_ipv4(val: str):
     try:
         ipaddress.ip_address(val)
     except ValueError:
-        raise ValueError("not a valid IPv4")
+        raise ValueError("not a valid IPv4 address")
+    return val
 
-def _validate_subnet(val: str):
-    net = ipaddress.ip_network("10.1.1.0/24")
-    if ipaddress.ip_address(val) not in net:
-        raise ValueError("not in LAN subnet 10.1.1.0/24")
 
 def _auto_detect_ip() -> str:
+    """Return the IP used to reach Conductor — correct in host network mode."""
     try:
+        conductor_host = os.getenv("CONDUCTOR_HOST", "10.1.1.20")
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((os.getenv("CONDUCTOR_HOST", "10.1.1.20"), 5672))
+        s.connect((conductor_host, 5672))
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Auto-detect failed ({e}), falling back to gethostname")
         return socket.gethostbyname(socket.gethostname())
