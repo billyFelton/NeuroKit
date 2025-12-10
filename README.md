@@ -9,7 +9,7 @@ pip install NeuroKit
 
 # NeuroKit: NeuroNetwork Core Library
 
-Lightweight Python lib for your home AI setup: Signal processing, convo state, orchestration, and health monitoring. Runs in Docker on 4-core/2.4GHz/8GB Ubuntu 24.04 nodes (64GB storage).
+Lightweight Python lib for your AI setup: Signal processing, convo state, orchestration, and health monitoring. Runs in Docker on 4-core/2.4GHz/8GB Ubuntu 24.04 nodes (64GB storage).
 
 ## Install in Containers
 In Cadre/Vox/Conductor Dockerfile:
