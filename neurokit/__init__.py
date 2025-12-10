@@ -16,7 +16,7 @@ __all__ = [
     "ServiceType", "RegisterStatus", "HealthStatus", "RegisterPayload", "HealthPayload", "NetworkHealth",
     "validate_neuro_env", "NeuroKitEnvError", "register_with_conductor",
     "HealthEndpoint", "HealthMonitor", "get_system_load",
-    "register_service"   # ← AND THIS
+    "register_service","start_neurokit_server"   # ← AND THIS
 ]
 
 # Safe contract.yaml loading
