@@ -276,6 +276,7 @@ class RabbitMQClient:
             auto_ack: Whether to auto-acknowledge messages
         """
         def _wrapped_callback(ch, method, properties, body):
+            envelope = None
             try:
                 envelope = MessageEnvelope.deserialize(body)
                 logger.debug(
