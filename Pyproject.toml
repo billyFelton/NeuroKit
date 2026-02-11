@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurokit"
+version = "0.2.0"
+description = "Shared library for the Neuro-Network AI integration platform"
+readme = "README.md"
+license = {text = "Proprietary"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Neuro-Network Team"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pika>=1.3.0",
+    "requests>=2.31.0",
+    "hvac>=2.1.0",
+]
+
+[project.optional-dependencies]
+# For services that talk directly to Postgres (Vault-IAM, Vault-Audit)
+db = [
+    "psycopg[binary]>=3.1.0",
+    "psycopg_pool>=3.1.0",
+]
+# For the Slack connector
+slack = [
+    "slack_sdk>=3.27.0",
+    "slack_bolt>=1.18.0",
+]
+# For development and testing
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "types-requests>=2.31.0",
+]
+# Everything
+all = [
+    "neurokit[db,slack,dev]",
+]
+
+[project.urls]
+# Update these to your actual GitHub org
+Repository = "https://github.com/yourorg/neurokit"
+Documentation = "https://github.com/yourorg/neurokit/wiki"
+
+[tool.setuptools.packages.find]
+include = ["neurokit*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Relax for now, tighten later
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests requiring live services (RabbitMQ, Vault, etc.)",
+]
