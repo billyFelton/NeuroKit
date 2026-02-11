@@ -237,7 +237,7 @@ class MessageEnvelope:
         ai_data = data.pop("ai_interaction", {})
 
         # Reconstruct enum values
-        if "decision" in auth_data and isinstance(auth_data["decision"], str):
+        if auth_data and "decision" in auth_data and isinstance(auth_data["decision"], str):
             auth_data["decision"] = AuthorizationDecision(auth_data["decision"])
 
         envelope = cls(**{
