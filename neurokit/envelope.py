@@ -233,7 +233,7 @@ class MessageEnvelope:
         data = json.loads(body.decode("utf-8"))
 
         actor_data = data.pop("actor", {})
-        auth_data = data.pop("authorization", {})
+        auth_data = data.pop("authorization", None) or {}
         ai_data = data.pop("ai_interaction", {})
 
         # Reconstruct enum values
@@ -388,8 +388,8 @@ class AuditEvent:
         data["event_type"] = EventType(data["event_type"])
 
         actor_data = data.pop("actor", {})
-        auth_data = data.pop("authorization", {})
-        ai_data = data.pop("ai_interaction", None)
+        auth_data = data.pop("authorization", {}) or {}
+        ai_data = data.pop("ai_interaction", None) or {}
 
         if "decision" in auth_data and isinstance(auth_data["decision"], str):
             auth_data["decision"] = AuthorizationDecision(auth_data["decision"])
