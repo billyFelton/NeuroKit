@@ -234,7 +234,7 @@ class MessageEnvelope:
 
         actor_data = data.pop("actor", {})
         auth_data = data.pop("authorization", None) or {}
-        ai_data = data.pop("ai_interaction", {})
+        ai_data = data.pop("ai_interaction", {}) or {}
 
         # Reconstruct enum values
         if auth_data and "decision" in auth_data and isinstance(auth_data["decision"], str):
