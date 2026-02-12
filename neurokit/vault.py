@@ -91,22 +91,31 @@ class VaultIAMClient:
         Authenticate this service with Vault-IAM.
 
         Args:
-            service_token: Service-to-service auth token
+            service_token: Service-to-service auth token (master token)
         """
-        if service_token:
-            self._session.headers["Authorization"] = f"Bearer {service_token}"
-            logger.info("Authenticated with Vault-IAM using service token")
-            return
-
-        # Service-to-service auth via Vault-IAM's auth endpoint
         try:
-            response = self._request("POST", "/api/v1/auth/service", json={
-                "service_name": self.config.service_name,
-                "service_version": self.config.service_version,
-            })
-            token = response["token"]
+            # Use the service token in the Authorization header
+            # to exchange for a JWT via the auth endpoint
+            headers = {}
+            if service_token:
+                headers["Authorization"] = f"Bearer {service_token}"
+
+            response = self._session.request(
+                "POST",
+                f"{self._base_url}/api/v1/auth/service",
+                json={"service_name": self.config.service_name},
+                headers=headers,
+                timeout=self._iam_config.timeout,
+            )
+
+            if response.status_code != 200:
+                raise IAMAuthError(f"Auth failed ({response.status_code}): {response.text}")
+
+            token = response.json()["token"]
             self._session.headers["Authorization"] = f"Bearer {token}"
             logger.info("Authenticated with Vault-IAM as %s", self.config.service_name)
+        except IAMAuthError:
+            raise
         except Exception as e:
             raise IAMAuthError(f"Failed to authenticate with Vault-IAM: {e}") from e
 
