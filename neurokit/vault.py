@@ -85,6 +85,7 @@ class VaultIAMClient:
         self._identity_cache: Dict[str, Dict] = {}
         self._role_cache: Dict[str, Dict] = {}
         self._cache_ttl = 300  # 5 minutes
+        self._service_token: Optional[str] = None
 
     def authenticate(self, service_token: Optional[str] = None) -> None:
         """
@@ -93,9 +94,11 @@ class VaultIAMClient:
         Args:
             service_token: Service-to-service auth token (master token)
         """
+        # Store for re-authentication on JWT expiry
+        if service_token:
+            self._service_token = service_token
         try:
-            # Use the service token in the Authorization header
-            # to exchange for a JWT via the auth endpoint
+            # If we have a service token, use it in the header for the auth call
             headers = {}
             if service_token:
                 headers["Authorization"] = f"Bearer {service_token}"
@@ -103,13 +106,18 @@ class VaultIAMClient:
             response = self._session.request(
                 "POST",
                 f"{self._base_url}/api/v1/auth/service",
-                json={"service_name": self.config.service_name},
+                json={
+                    "service_name": self.config.service_name,
+                    "service_version": getattr(self.config, "service_version", "0.1.0"),
+                },
                 headers=headers,
                 timeout=self._iam_config.timeout,
             )
 
             if response.status_code != 200:
-                raise IAMAuthError(f"Auth failed ({response.status_code}): {response.text}")
+                raise IAMAuthError(
+                    f"Auth failed ({response.status_code}): {response.text}"
+                )
 
             token = response.json()["token"]
             self._session.headers["Authorization"] = f"Bearer {token}"
@@ -119,7 +127,7 @@ class VaultIAMClient:
         except Exception as e:
             raise IAMAuthError(f"Failed to authenticate with Vault-IAM: {e}") from e
 
-    def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+    def _request(self, method: str, path: str, _retried: bool = False, **kwargs) -> Dict[str, Any]:
         """Make an HTTP request to Vault-IAM with error handling."""
         url = f"{self._base_url}{path}"
         kwargs.setdefault("timeout", self._iam_config.timeout)
@@ -131,6 +139,14 @@ class VaultIAMClient:
         except requests.Timeout as e:
             raise IAMError(f"Vault-IAM request timed out: {e}") from e
 
+        if response.status_code == 401 and not _retried:
+            # JWT likely expired — re-authenticate and retry once
+            logger.info("Vault-IAM JWT expired, re-authenticating...")
+            try:
+                self.authenticate(self._service_token)
+                return self._request(method, path, _retried=True, **kwargs)
+            except Exception:
+                raise IAMAuthError("Vault-IAM authentication failed")
         if response.status_code == 401:
             raise IAMAuthError("Vault-IAM authentication failed")
         if response.status_code == 403:
